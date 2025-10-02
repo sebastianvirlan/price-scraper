@@ -1,6 +1,18 @@
 {
   "products": [
-    { "url": "https://uk.tommy.com/essential-roll-top-backpack-am0am13401bds", "currentPrice": 85.00, "size": "One Size" }
+    {
+      "url": "https://example.com/essential-roll-top-backpack-am0am13401bds",
+      "currentPrice": 85.0,
+      "size": "One Size"
+    },
+    {
+      "url": "https://www.example.com/877",
+      "currentPrice": 200,
+      "size": "Whole Set",
+      "timeout": 30000,
+      "hours": [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0 ],
+      "disabledNotification": true
+    }
   ],
   "pushOver": {
     "token": "",

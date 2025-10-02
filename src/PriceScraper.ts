@@ -1,5 +1,6 @@
 import { firefox, type Browser } from "playwright";
 import type { IProductParser } from "./parsers/IProductParser";
+import { extractDomain } from "./util/extractDomain";
 
 export type Parsers = Record<string, { parser: IProductParser; brand: string } >
 
@@ -25,39 +26,34 @@ export class PriceScraper {
     this._websiteParsers = websiteParsers
   }
 
-  static async parse(url: string, size?: string) {
+  static async parse(product: { url: string, productSku?: string, size?: string, type?: string, timeout?: number } ) {
     if(!this._websiteParsers)
-      throw new Error(`Call PriceScraper.setWebsiteParsers first`)
+      throw new Error(`No parsers available. Call PriceScraper.setWebsiteParsers first`)
 
-    const urlObj = new URL(url);
-    const domain = urlObj.origin;
+    const domain = extractDomain(product.url);
+    const parser = this._websiteParsers[domain];
 
-    const website = this._websiteParsers[domain];
-    if (!website) throw new Error(`Domain ${domain} not supported!`);
+    if (!parser) throw new Error(`Domain ${domain} not supported!`);
 
-    const browser = await this.init();
-    const context = await browser.newContext(); // create fresh context
+    if(product.type === 'API' && product.productSku && parser.parser.fetchApiData) {
+      const productData = await parser.parser.fetchApiData(product.productSku)
+      return parser.parser.parse(productData, parser.brand, product.size)
+    } else {
+      const browser = await this.init();
+      const context = await browser.newContext(); // create fresh context
+      const page = await context.newPage();
 
-    const page = await context.newPage();
-
-    try {
-      await page.goto(url, {
-        waitUntil: "domcontentloaded",
-        timeout: 60000,
-      });
-
-      const content = await page.content();
-
-      // await browser.close();
-
-      return website
-        ? website.parser.parse(content, website.brand, size)
-        : undefined;
-    } catch (e: any) {
-      console.log(e);
-      await context.close();
-    } finally {
-      await context.close();
+      try {
+        await page.goto(product.url, { waitUntil: 'domcontentloaded', timeout: product.timeout ?? 0 }); // waits until network activity stops
+        await parser.parser.postBrowserAction?.(page)
+        const content = await page.content();
+        return parser.parser.parse(content, parser.brand, product.size)
+      } catch (e: any) {
+        console.log(e);
+        await context.close();
+      } finally {
+        await context.close();
+      }
     }
   }
 }

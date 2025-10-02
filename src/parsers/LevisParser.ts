@@ -1,65 +1,114 @@
-import * as cheerio from "cheerio";
 import type { IProductParser } from "./IProductParser.js";
 import { Product } from "./Types/Products.js";
 import type { IProduct } from "./Types/IProduct.js";
+import axios from "axios";
 
-type VariantAvailability = {
-  waist: string;
-  length: string;
-  available: boolean;
-};
+export interface LeviProductResponse {
+  data: {
+    product: LeviProduct;
+  };
+}
 
-type LevisSwatch = {
+export type LeviProduct = {
+  name: string;
   code: string;
   colorName: string;
-  variantsAvailability: VariantAvailability[];
+  price: {
+    currencyIso: string;
+    formattedValue: string;
+    value: number;
+  };
+  variantOptions: LeviProductVariation[];
+};
+
+export type LeviProductVariation = {
+  code: string;
+  colorName: string | null;
+  size: string;
+  displaySizeDescription: string;
+  priceData: {
+    currencyIso: string;
+    formattedValue: string;
+    value: number;
+  };
+  stock?: {
+    stockLevel: number;
+    stockLevelStatus: "lowStock" | "inStock";
+  };
 };
 
 export class LevisParser implements IProductParser {
-  parse(html: string, brand: string, size: string): IProduct {
-    const $ = cheerio.load(html);
-
-    const title = $("div.product-details__buy-box h1.product-title").text();
-    const price = $("div.price-container").attr("data-cnstrc-item-price") ?? "";
-
-    const id = $("div.product-details-page").attr("data-lsco-pdp-product-id");
-
-    const extractSwatches = (js: string): LevisSwatch[] | undefined => {
-      const match = js.match(/,"swatches":(\[.*?\])(?=,?"showLoading")/s);
-      if (!match || !match[1]) return undefined;
-
-      try {
-        return JSON.parse(match[1]); // raw array as string
-      } catch (e) {
-        return [];
-      }
-    };
-
-    let inStock = false;
-    let swatch : LevisSwatch | undefined
+  parse(productResponse: LeviProduct, brand: string, size: string): IProduct {
     const splitSize = size.split("-");
-    if (splitSize.length === 2) {
-      const swatches = extractSwatches(html);
-      if (swatches) {
-        swatch = swatches.find(
-          (swatch: any) => swatch.code === id
-        );
+    const waist = splitSize[0];
+    const length = splitSize[1];
 
-        if (swatch) {
-          const waist = splitSize[0];
-          const length = splitSize[1];
-
-          inStock =
-            swatch.variantsAvailability.find(
-              (size) => size.waist == waist && size.length == length
-            )?.available ?? false;
-        }
-      }
-    }
-
-    const product = new Product(swatch ? `${title} ${swatch.colorName}` : title, price, brand, inStock);
+    const product = new Product(
+      `${productResponse.name} ${productResponse.colorName}`,
+      productResponse.price.formattedValue,
+      brand,
+      productResponse.variantOptions.some(variant => variant.displaySizeDescription === `${waist}W X ${length}L` && variant.stock?.stockLevelStatus === 'inStock')
+    );
     product.setSize(size);
 
     return product;
+  }
+
+  async fetchApiData(productSku: string): Promise<LeviProduct> {
+    try {
+      const response = await axios.post<LeviProductResponse>(
+        "https://www.levi.com/nextgen-webhooks/?operationName=product&locale=GB-en_GB",
+        {
+          operationName: "product",
+          variables: {
+            code: productSku,
+          },
+          query: `
+          query product($code: String!) {
+            product(code: $code) {
+              name
+              code
+              colorName
+              price {
+                currencyIso
+                formattedValue
+                value
+              }
+              variantOptions {
+                code
+                colorName
+                displaySizeDescription
+                priceData {
+                  currencyIso
+                  formattedValue
+                  value
+                }
+                stock {
+                  stockLevel
+                  stockLevelStatus
+                }
+              }
+            }
+          }
+        `,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "x-client": "LMA",
+            "x-operationname": "product",
+            "x-sessionid": "dummy",
+            "User-Agent": "LeviStraussEurope/8.13.1/AppiOS26.0",
+            "x-locale": "en_GB",
+            "x-country": "GB",
+          },
+        }
+      );
+
+      return response.data.data.product
+    } catch (error: any) {
+      console.error(error.response?.data || error.message);
+      throw error;
+    }
   }
 }

@@ -11,6 +11,7 @@ import type { IProductParser } from "./parsers/IProductParser.js";
 import { LevisParser } from "./parsers/LevisParser.js";
 import { TommyHilfigerParser } from "./parsers/TommyHilfigerParser.js";
 import config from './config.json' with { type: 'json' }
+import { PopMartParser } from "./parsers/PopMartParser.js";
 
 const main = async () => {
 
@@ -49,6 +50,10 @@ const main = async () => {
     "https://www.diy.com": {
       parser: new DIYParser(),
       brand: "B and Q"
+    },
+    "https://www.popmart.com": {
+      parser: new PopMartParser(),
+      brand: "PopMart"
     }
   };
 
@@ -59,7 +64,13 @@ const main = async () => {
   PriceScraper.setWebsiteParsers(WEBSITE_PARSERS)
 
   for(const product of config.products) {
-    const parsedProduct = await PriceScraper.parse(product.url, product.size)
+    const currentHour = new Date().getHours()
+
+    if(!product.hours?.includes(currentHour)) {
+      if(!config.hours.includes(currentHour)) { continue }
+    }
+
+    const parsedProduct = await PriceScraper.parse(product)
 
     if(!parsedProduct) return
     data.push([
@@ -72,9 +83,9 @@ const main = async () => {
       parsedProduct.getPrice(),
     ])
 
-    if (parseFloat(parsedProduct.getPrice().replace(/[£$,]/g, '')) < product.currentPrice) {
+    if (!product.disabledNotification && parsedProduct.getInStock() && parseFloat(parsedProduct.getPrice().replace(/[£$,]/g, '')) < product.currentPrice) {
       console.log(`💸 Price drop: ${parsedProduct.getProductTitle()} is now ${parsedProduct.getPrice()}`, `sending notification to Sebastian's iPhone`)
-      await sendPushoverNotification(`💸 Price drop`, `${parsedProduct.getProductTitle()} is now ${parsedProduct.getPrice()}. Stock: ${parsedProduct.getInStock()}`, product.url);
+      await sendPushoverNotification(`💸 Price drop`, `${parsedProduct.getProductTitle()} is now ${parsedProduct.getPrice()}. Stock: ${parsedProduct.getInStock() ? 'Yes' : 'No'}`, product.url);
     }
   }
 
@@ -87,7 +98,7 @@ const main = async () => {
 main();
 
 
-async function sendPushoverNotification(title: string, message: string, link: string) {
+export async function sendPushoverNotification(title: string, message: string, link: string) {
   await axios.post('https://api.pushover.net/1/messages.json', {
     token: config.pushOver.token,
     user: config.pushOver.user,

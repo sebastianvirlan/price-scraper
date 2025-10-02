@@ -13,7 +13,7 @@ export class ArgosParser implements IProductParser {
       .text()
       .trim();
 
-    const product = new Product(title, price, brand);
+    const product = new Product(title, price, brand, true);
     product.setSize(size)
 
     return product

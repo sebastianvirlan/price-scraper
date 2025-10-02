@@ -2,6 +2,7 @@ import axios from "axios";
 import { table } from "table";
 import { EstateScraper } from "./EstateScrapper.js";
 import config from './config.json' with { type: 'json' }
+import { sendPushoverNotification } from "./index.js";
 
 const main = async () => {
   const products = [
@@ -39,15 +40,3 @@ const main = async () => {
 };
 
 main();
-
-
-async function sendPushoverNotification(title: string, message: string, link: string) {
-  await axios.post('https://api.pushover.net/1/messages.json', {
-    token: config.pushOver.token,
-    user: config.pushOver.user,
-    url: link,
-    url_title: title,
-    title,
-    message,
-  });
-}
