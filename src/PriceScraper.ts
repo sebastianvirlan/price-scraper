@@ -1,6 +1,6 @@
 import { firefox, type Browser } from "playwright";
 import type { IProductParser } from "./parsers/IProductParser";
-import { extractDomain } from "./util/extractDomain";
+import { extractDomain } from "./util/extractDomain.js";
 
 export type Parsers = Record<string, { parser: IProductParser; brand: string } >
 
